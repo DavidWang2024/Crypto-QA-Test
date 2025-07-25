@@ -60,7 +60,10 @@ def verify_response(response, instrument_name, timeframe=None):
             '''
     return res_data
             
-#--------- Test Cases ---------#
+#--------------------------
+#-------- Test Cases ------
+#--------------------------
+
 #1 Valid instruments name   
 @pytest.mark.parametrize("instrument", VALID_INSTRUMENTS)
 def test_basic_request(instrument):

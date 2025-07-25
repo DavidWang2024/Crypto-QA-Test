@@ -1,0 +1,7 @@
+Hi Dear leaders,
+
+This is David's test for the API/Websocket, I tried to add some test cases, may not be so complete and detailized due to time and bussiness limit. Thanks for your understanding!
+But I think I am a quick leraner, I can learn with much more passion.
+
+Regards
+David
