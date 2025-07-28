@@ -11,13 +11,14 @@ logger = logging.getLogger(__name__)
 
 WS_MARKET_URL = "wss://stream.crypto.com/exchange/v1/market"
 INSTRUMENT = "BTCUSD-PERP"
-DEPTHS = 10
+DEPTH = 10
+DEPTHS = [10, 50]
 SUBSCRIPTION_DELTA = "SNAPSHOT_AND_UPDATE"
 SNAPSHOT_FREQS = [100, 500]
 DELTA_FREQS = [10, 100]
 
 #Support function to send subscribe
-async def subscribe(ws, instrument=INSTRUMENT, depth=DEPTHS):
+async def subscribe(ws, instrument=INSTRUMENT, depth=DEPTH):
     sub_id = int (time.time()*1000)
     await ws.send(json.dumps({
             "id": sub_id,
@@ -41,7 +42,7 @@ async def test_basci_subscription():
             "id": sub_id,
             "method": "subscribe",
             "params": {
-                "channels": [f"book.{INSTRUMENT}.{DEPTHS}"],
+                "channels": [f"book.{INSTRUMENT}.{DEPTH}"],
                 "book_subscription_type": SUBSCRIPTION_DELTA,
                 "book_update_frequency": 100
             }
@@ -56,8 +57,8 @@ async def test_basci_subscription():
         #Verify initial snapshot
         snapshot = json.loads(await ws.recv())
         assert snapshot["result"]["channel"] == "book"
-        assert len(snapshot["result"]["data"][0]["asks"]) == DEPTHS
-        assert len(snapshot["result"]["data"][0]["bids"]) == DEPTHS
+        assert len(snapshot["result"]["data"][0]["asks"]) == DEPTH
+        assert len(snapshot["result"]["data"][0]["bids"]) == DEPTH
         last_u = snapshot["result"]["data"][0]["u"]
         
         #Verify delta update
@@ -108,20 +109,58 @@ async def test_invalid_parameters():
     async with websockets.connect(WS_MARKET_URL) as ws:
         sub_id = int(time.time()*1000)
         await ws.send(json.dumps({
-        "id": sub_id,
-        "method": "subscribe",
-        "params": {
-            "channels": [f"book.{INSTRUMENT}.5"], #Invalid depth
+            "id": sub_id,
+            "method": "subscribe",
+            "params": {
+                "channels": [f"book.{INSTRUMENT}.5"], #Invalid depth
             }
         }))
         response = json.loads(await ws.recv())
         assert response["code"] != 0
 
 #Test_case_5: Verify data with 10 and 50 depths
+    #Setps:
     #1) Subscribe separatly with 10 and 50 depths
     #2) Verify the depth amount from response
     #3) Verify the asks and bids sequence  
         
+@pytest.mark.asyncio
+async def test_data_integrity_with_diffdepths():
+    for depth in DEPTHS:
+        sub_id = int(time.time()*1000)
+        sub_msg = {
+            "id": sub_id,
+            "method": "subscribe",
+            "params":{
+                "channels": [f"book.{INSTRUMENT}.{depth}"]
+                "book_subscription_type": "SNAPSHOT",
+            }
+        }
+        async with websockets.connect(WS_MARKET_URL) as ws:
+            await ws.send(json.dumps(sub_msg))
+            response = json.loads(await ws.revc())
+            assert response["code"] == 0
+
+            #verify depths
+            snapshot = json.loads(await ws.recv())
+            book = snapshot["results"]["data"][0]
+            assert len(book["bids"]) == depth
+            assert len(book["asks"]) == depth
+        
+            #verify bids price
+            bid_prices = float(level[0] for level in book["bids"])
+            assert bid_prices == sorted(bid_prices, reverse=True) #bid price order is from high to low
+        
+            #verify asks price
+            ask_prices = float(level[0] for level in book["asks"])
+            assert ask_prices == sorted(ask_prices) #ask price order is from low to high 
+            
+            #verify best_bid is less than best_ask
+            best_bid = float(book["bids"][0][0])
+            best_ask = float(book["asks"][0][0])
+            assert best_bid < best_ask
+            
+            
 #Test_case_6: Verify send snapshot every 500ms even no any update
     #1) Subscribe initial snapshot
     #2) Verify snapshot
